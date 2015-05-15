@@ -25,7 +25,7 @@
             }
 
             function getData() {
-              var root = document.getElementById("data").childNodes[0];
+              var root = document.getElementsByTagName("benchmarks")[0];
               // gather all data to benchmarks
               var benchmarks = [];
               for (var i = 0; i != root.childNodes.length; ++i) {
