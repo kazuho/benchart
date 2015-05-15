@@ -25,21 +25,18 @@
             }
 
             function getData() {
-              var root = document.getElementsByTagName("benchmarks")[0];
               // gather all data to benchmarks
               var benchmarks = [];
-              for (var i = 0; i != root.childNodes.length; ++i) {
-                if (root.childNodes[i].nodeType != 1)
-                  continue;
-                var set = root.childNodes[i];
+              var src = document.getElementsByTagName("benchmark");
+              for (var i = 0; i != src.length; ++i) {
                 var target = {
-                  name: set.getAttribute("name"),
+                  name: src[i].getAttribute("name"),
                   scores: {}
                 };
-                for (var j = 0; j != set.childNodes.length; ++j) {
-                  if (set.childNodes[j].nodeType != 1)
+                for (var j = 0; j != src[i].childNodes.length; ++j) {
+                  if (src[i].childNodes[j].nodeType != 1)
                     continue;
-                  var score = set.childNodes[j];
+                  var score = src[i].childNodes[j];
                   target.scores[score.getAttribute("name")] = score.getAttribute("value");
                 }
                 benchmarks.push(target);
