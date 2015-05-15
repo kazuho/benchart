@@ -10,7 +10,7 @@ use Pod::Usage qw(pod2usage);
 
 our $VERSION = '0.0.1';
 
-our $DEFAULT_XSLT = "https://examp1e.net/benchart/head/benchart.xslt";
+our $DEFAULT_XSLT = "https://examp1e.net/benchart/benchart.xslt";
 
 my ($opt_name, $opt_file, $opt_show, $opt_xsl);
 $opt_file = "benchart.xml";
