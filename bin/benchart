@@ -8,7 +8,7 @@ use Getopt::Long;
 use JSON::PP;
 use Pod::Usage qw(pod2usage);
 
-our $VERSION = '0.0.1';
+our $VERSION = '0.01';
 
 our $DEFAULT_XSLT = "https://examp1e.net/benchart/benchart.xslt";
 
