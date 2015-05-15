@@ -17,7 +17,7 @@ $opt_file = "benchart.xml";
 
 GetOptions(
     "name=s"   => \$opt_name,
-    file       => \$opt_file,
+    "file=s"   => \$opt_file,
     "show:s"   => \$opt_show,
     "xsl=s"    => \$opt_xsl,
     help       => sub {
@@ -122,10 +122,55 @@ benchart - benchmark recorder and visualizer
 
 =head1 SYNOPSIS
 
-    # run the benchmark script and record the numbers
-    $0 -- <benchmark-script>
+  # run the benchmark script and record the numbers
+  $0 -- <benchmark-script>
 
-    # open the web browser to show the charts
-    $0 --show
+  # open Safari to show the charts
+  $0 --show
+
+=head1 DESCRIPTION
+
+The command records the results of the conducted benchmarks in C<benchart.xml> which, when being opened by a web browser, draws a nice chart.
+
+The benchmark script being run must emit a JSON mapping that contains key-values pairs of the scores.
+E.g. in case of SunSpider benchmark, the result of the benchmark program should look like:
+
+  {
+    "3d/cube":             14.1,
+    "3d/morph":            5.3,
+    "3d/raytrace":         13.0,
+    "access/binary-trees": 3.0,
+    ...
+  }
+
+=head1 OPTIONS
+
+=head2 --file=file
+
+Sets the name of the file to record the benchmarks (default: C<benchart.xml>).
+
+=head2 --name=name
+
+Sets the name of the benchmark being recorded by the benchmark-script.
+If omitted, the name will be the Git commit id of the current directory, or the tag name if any.
+
+=head2 --show[=progname]
+
+Opens the benchmark chart using the specified web browser (defaults to Safari).
+Note that Google Chrome cannot be used for viewing the charts unless you set the XSLT link to a local file.
+
+=head2 --xsl[=/path/to/xsl-file]
+
+Path of the XSLT file to be recorded in C<benchart.xml>.
+The default path is C<https://examp1e.net/benchart/benchart.xlst>.
+The path is reset to the default if an empty value is specified.
+
+=head1 AUTHOR
+
+Kazuho Oku
+
+=head1 LICENSE
+
+MIT
 
 =cut
