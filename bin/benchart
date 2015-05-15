@@ -5,7 +5,6 @@ use warnings;
 use Errno ();
 use File::Basename qw(dirname);
 use Getopt::Long;
-use JSON::PP;
 use Pod::Usage qw(pod2usage);
 
 our $VERSION = '0.01';
@@ -45,10 +44,17 @@ my $scores = (sub {
         unless @ARGV;
     open my $fh, "-|", (@ARGV)
         or die "failed to exec $ARGV[0]:$!";
-    my $input = join ",", <$fh>;
+    my %ret;
+    while (my $line = <$fh>) {
+        $line =~ s/^\s*(.*)\s*$/$1/s;
+        my @cols = split /(?:\s*:\s*|\s+)/, $line;
+        if ($cols[1] =~ /^[0-9]+\.[0-9]+$/) {
+            $ret{$cols[0]} = $cols[1];
+        }
+    }
     close $fh
         or die "benchmark script failed with exit status:$?\n";
-    decode_json($input);
+    \%ret;
 })->();
 
 # obtain the default name
@@ -132,16 +138,13 @@ benchart - benchmark recorder and visualizer
 
 The command records the results of the conducted benchmarks in C<benchart.xml> which, when being opened by a web browser, draws a nice chart.
 
-The benchmark script being run must emit a JSON mapping that contains key-values pairs of the scores.
+The benchmark script must emit a series of space-or-colon-separated lines that contains key-values pairs of the scores, and the scores look like numbers.
 E.g. in case of SunSpider benchmark, the result of the benchmark program should look like:
 
-  {
-    "3d/cube":             14.1,
-    "3d/morph":            5.3,
-    "3d/raytrace":         13.0,
-    "access/binary-trees": 3.0,
-    ...
-  }
+3d/cube             14.1
+3d/morph            5.3
+3d/raytrace         13.0
+access/binary-trees 3.0
 
 =head1 OPTIONS
 
