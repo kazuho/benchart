@@ -5,7 +5,7 @@
   xmlns="http://www.w3.org/1999/xhtml">
   <xsl:output method="xml" indent="yes" encoding="UTF-8"/>
 
-  <xsl:template match="/benchmarks">
+  <xsl:template match="/benchart">
     <html>
       <head>
         <title>Benchmarks - Benchart</title>
@@ -30,17 +30,24 @@
               var src = document.getElementsByTagName("benchmark");
               for (var i = 0; i != src.length; ++i) {
                 var target = {
-                  name: src[i].getAttribute("name"),
+                  name:   null,
                   scores: {}
                 };
                 for (var j = 0; j != src[i].childNodes.length; ++j) {
-                  if (src[i].childNodes[j].nodeType != 1)
+                  var element = src[i].childNodes[j];
+                  if (element.nodeType != 1)
                     continue;
-                  var score = src[i].childNodes[j];
-                  target.scores[score.getAttribute("name")] = score.getAttribute("value");
+                  if (element.tagName == "name") {
+                    target.name = element.childNodes[0].nodeValue;
+                  } else if (element.tagName == "score") {
+                    target.scores[element.getElementsByTagName("name")[0].childNodes[0].nodeValue] = element.getElementsByTagName("value")[0].childNodes[0].nodeValue;
+                  }
                 }
+                if (target.name === null)
+                  throw new Error("name not found");
                 benchmarks.push(target);
               }
+              console.log(benchmarks);
               // build list of labels
               var labels = (function () {
                 var m = {};
@@ -82,13 +89,16 @@
           body {
             text-align: center;
           }
+          #data {
+            display: none;
+          }
         </style>
       </head>
       <body>
         <canvas id="chart" width="400" height="400"/>
         <div id="legend"/>
-        <div id="data" style="display: none;">
-          <xsl:copy-of select="/benchmarks"/>
+        <div id="data">
+          <xsl:copy-of select="benchmark"/>
         </div>
       </body>
     </html>

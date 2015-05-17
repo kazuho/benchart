@@ -6,108 +6,172 @@ use Errno ();
 use File::Basename qw(dirname);
 use Getopt::Long;
 use Pod::Usage qw(pod2usage);
+use XML::TreePP;
 
 our $VERSION = '0.01';
-
 our $DEFAULT_XSLT = "https://examp1e.net/benchart/benchart.xslt";
 
-my ($opt_name, $opt_file, $opt_show, $opt_xsl);
-$opt_file = "benchart.xml";
+my $opt_file = "benchart.xml";
+my @DEFAULT_OPTIONS = (
+    "file=s" => \$opt_file,
+);
 
-GetOptions(
-    "name=s"   => \$opt_name,
-    "file=s"   => \$opt_file,
-    "show:s"   => \$opt_show,
-    "xsl=s"    => \$opt_xsl,
-    help       => sub {
-        pod2usage(0);
-    },
-    version    => sub {
-        print "$VERSION\n";
-        exit 0;
-    },
-) or exit 1;
+sub cmd_help {
+    pod2usage(0);
+}
 
-if (defined $opt_show) {
-    $opt_show ||= "safari";
-    my $pwd = dirname($0);
-    exec "open", "-a", $opt_show, "benchart.xml";
+sub cmd_version {
+    print "$VERSION\n";
+}
+
+sub cmd_try {
+    my $opt_force;
+    GetOptions(
+        force => \$opt_force,
+        @DEFAULT_OPTIONS,
+    ) or exit 1;
+
+    my $doc = load(1);
+    die "command for the benchmark is already registered; use `--force` to update it\n"
+        if ! $opt_force && $doc->{command};
+
+    my $scores = run_bench(@ARGV);
+    die "try failed; no benchmark data obtained\n"
+        unless @$scores;
+    $doc->{'try-command'} = {
+        arg => [@ARGV],
+    };
+
+    save($doc);
+
+    print "The command returned the following scores:\n\n";
+    for my $score (@$scores) {
+        print "    $score->[0]: $score->[1]\n";
+    }
+    print "\n";
+    print "If the results look ok, run `$0 try-ok` to commit the result and the benchmark command\n";
+
+}
+
+sub cmd_try_ok {
+    my $opt_force;
+    GetOptions(
+        force => \$opt_force,
+        @DEFAULT_OPTIONS,
+    ) or exit 1;
+
+    my $doc = load(0);
+    die "command not tested, run `$0 try [cmd...]` before running `try-ok`\n"
+        unless defined $doc->{'try-command'};
+    die "command for the benchmark is already registered; use `--force` to update it\n"
+        if ! $opt_force && $doc->{command};
+
+    $doc->{command} = $doc->{'try-command'};
+    delete $doc->{'try-command'};
+
+    save($doc);
+}
+
+sub cmd_record {
+    my $name;
+    GetOptions(
+        "name=s" => \$name,
+        @DEFAULT_OPTIONS,
+    ) or exit 1;
+
+    my $doc = load(0);
+    die "command not registered; run `$0 try` and `$0 try-ok` befor running `$0 record`\n"
+        unless defined $doc->{command};
+
+    if (! defined $name) {
+        my $tags = `git describe --exact-match --tags 2> /dev/null`;
+        if ($tags eq '') {
+            $tags = `git show --pretty=format:\%h HEAD 2> /dev/null | head -1`;
+            die "failed to obtain name via git; please use --name=<name> to specify the name of the benchmark\n"
+                unless $tags ne '';
+        }
+        $name = (split "\n", $tags)[0];
+    }
+
+    my $scores = run_bench(@{$doc->{command}->{arg}});
+    die "the command did not emit any benchmark data\n"
+        unless @$scores;
+
+    $doc->{benchmark} ||= [];
+    $doc->{benchmark} = [$doc->{benchmark}]
+        if ref $doc->{benchmark} eq 'HASH';
+    push @{$doc->{benchmark}}, {
+        name  => $name,
+        score => [
+            +(map {
+                +{
+                    name  => $_->[0],
+                    value => $_->[1],
+                }
+            } @$scores),
+        ],
+    };
+
+    save($doc);
+}
+
+sub cmd_show {
+    my $browser = "safari";
+    GetOptions(
+        "browser=s" => \$browser,
+        @DEFAULT_OPTIONS,
+    ) or exit 1;
+
+    die "file $opt_file does not exist\n"
+        unless -e $opt_file;
+
+    exec "open", "-a", $browser, $opt_file;
     die "open(1) failed:$!";
 }
 
-die "script not specified\n"
-    if ! ($opt_xsl || @ARGV);
+sub load {
+    my $fallback_to_default = shift;
+    my $src = do {
+        open my $fh, "<", $opt_file or do {
+            return {}
+                if $! == Errno::ENOENT && $fallback_to_default;
+            die "failed to open file:$opt_file:$!";
+        };
+        local $/;
+        <$fh>;
+    };
+    my $doc = XML::TreePP->new->parse($src)
+        or die "failed to parse file:$opt_file";
+    $doc->{benchart};
+}
 
-# run the benchmark script
-my $scores = (sub {
-    return +{}
-        unless @ARGV;
-    open my $fh, "-|", (@ARGV)
-        or die "failed to exec $ARGV[0]:$!";
-    my %ret;
+sub save {
+    my $doc = shift;
+    my $xml = XML::TreePP->new->write({ benchart => $doc });
+
+    $xml =~ s{(\?>)}{$1\n<?xml-stylesheet type="text/xsl" href="$DEFAULT_XSLT"?>}s;
+
+    open my $fh, ">", $opt_file
+        or die "failed to open file:$opt_file:$!";
+    print $fh $xml;
+    close $fh;
+}
+
+sub run_bench {
+    my @argv = @_;
+    open my $fh, "-|", (@argv)
+        or die "failed to exec $argv[0]:$!";
+    my @ret;
     while (my $line = <$fh>) {
         $line =~ s/^\s*(.*)\s*$/$1/s;
         my @cols = split /(?:\s*:\s*|\s+)/, $line;
         if ($cols[1] =~ /^[0-9]+\.[0-9]+$/) {
-            $ret{$cols[0]} = $cols[1];
+            push @ret, [$cols[0], $cols[1]];
         }
     }
     close $fh
         or die "benchmark script failed with exit status:$?\n";
-    \%ret;
-})->();
-
-# obtain the default name
-if (%$scores && ! defined $opt_name) {
-    my $tags = `git describe --exact-match --tags 2> /dev/null`;
-    if ($tags eq '') {
-        $tags = `git show --pretty=format:\%h HEAD 2> /dev/null | head -1`;
-        die "failed to obtain name via git; please use --name=<name> to specify the name of the benchmark\n"
-            unless $tags ne '';
-    }
-    $opt_name = (split "\n", $tags)[0];
-}
-
-# read the existing records
-my $xml = (sub {
-    open my $fh, "<", $opt_file
-        or do {
-            if ($! == Errno::ENOENT) {
-                return << "***";
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" href="@{[xml_escape($DEFAULT_XSLT)]}"?>
-<benchmarks>
-</benchmarks>
-***
-            }
-            die "failed to open file:$opt_file:$!";
-        };
-    local $/;
-    <$fh>;
-})->();
-
-# update the records
-if ($opt_xsl) {
-    $opt_xsl ||= $DEFAULT_XSLT;
-    $xml =~ s{(<\?xml-stylesheet .*?href=").*?("\?>)}{$1@{[xml_escape($opt_xsl)]}$2};
-}
-if (%$scores) {
-    $xml =~ s{(</benchmarks)}{ join "\n", (
-        qq{  <benchmark name="@{[xml_escape($opt_name)]}">},
-        +(map {
-            qq{    <score name="@{[xml_escape($_)]}" value="@{[xml_escape($scores->{$_})]}"/>}
-        } sort keys %$scores),
-        qq{  </benchmark>},
-        $1,
-    ) }sex;
-}
-
-# save the records
-{
-    open my $fh, '>', $opt_file
-        or die "failed to open file:$opt_file:$!";
-    print $fh $xml;
-    close $fh;
+    \@ret;
 }
 
 sub xml_escape {
@@ -120,6 +184,23 @@ sub xml_escape {
     $s;
 }
 
+sub main {
+    die "no command\n"
+        unless @ARGV;
+    my $cmd = shift @ARGV;
+
+    $cmd =~ m{^(try|try-ok|record|show|--help|--version)$}s
+        or die "unknown command: $cmd\n";
+    $cmd = $1;
+    $cmd =~ s/^-+//s;
+    $cmd = "cmd_$cmd";
+    $cmd =~ tr/-/_/;
+    no strict 'refs';
+    &$cmd();
+}
+
+main();
+
 __END__
 
 =head1 NAME
@@ -128,11 +209,17 @@ benchart - benchmark recorder and visualizer
 
 =head1 SYNOPSIS
 
-  # run the benchmark script and record the numbers
-  $0 -- <benchmark-script>
+  # setup the benchmark command
+  $0 try -- benchmark-cmd args...
 
-  # open Safari to show the charts
-  $0 --show
+  # commit the benchmark command
+  $0 try-ok
+
+  # record the benchmark
+  $0 record
+
+  # show the results
+  $0 show
 
 =head1 DESCRIPTION
 
