@@ -139,7 +139,11 @@ my @DEFAULT_OPTIONS = (
 );
 
 sub cmd_help {
-    pod2usage(0);
+    pod2usage(
+        -exitval  => 0,
+        -verbose  => 99,
+        -sections => "NAME|SYNOPSIS|SUB-COMMANDS",
+    );
 }
 
 sub cmd_version {
