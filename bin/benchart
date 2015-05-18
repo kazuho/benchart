@@ -312,11 +312,9 @@ sub main {
         unless @ARGV;
     my $cmd = shift @ARGV;
 
-    $cmd =~ m{^(try|try-ok|record|show|--help|--version)$}s
+    $cmd =~ m{^(?:--)?(try|try-ok|record|show|help|version)$}s
         or die "unknown command: $cmd\n";
-    $cmd = $1;
-    $cmd =~ s/^-+//s;
-    $cmd = "cmd_$cmd";
+    $cmd = "cmd_$1";
     $cmd =~ tr/-/_/;
     no strict 'refs';
     &$cmd();
