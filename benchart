@@ -5,6 +5,7 @@ use warnings;
 use Errno ();
 use File::Basename qw(dirname);
 use Getopt::Long;
+use List::Util qw(first);
 use Pod::Usage qw(pod2usage);
 use XML::TreePP;
 
@@ -146,9 +147,10 @@ sub cmd_version {
 }
 
 sub cmd_record {
-    my $name;
+    my ($name, $reuse);
     GetOptions(
-        'name=s' => \$name,
+        'name=s'  => \$name,
+        'reuse=s' => \$reuse,
         @DEFAULT_OPTIONS,
     ) or exit 1;
 
@@ -168,8 +170,13 @@ sub cmd_record {
     if (! @cmd_argv) {
         die "no command\n"
             unless @{$doc->{benchmark}};
-        @cmd_argv = @{$doc->{benchmark}->[@{$doc->{benchmark}} - 1]->{cmd}->{arg}};
-        print "re-running last benchmark command: " . (join " ",  @cmd_argv) . "\n";
+        if ($reuse) {
+            @cmd_argv = map { @{$_->{cmd}->{arg}} } first { $_->{name} eq $reuse } @{$doc->{benchmark}}
+                or die "failed to obtain command used for benchmark named: $reuse\n";
+        } else {
+            @cmd_argv = @{$doc->{benchmark}->[@{$doc->{benchmark}} - 1]->{cmd}->{arg}};
+        }
+        print "re-running benchmark command: " . (join " ",  @cmd_argv) . "\n";
     }
 
     my $scores = run_bench(@cmd_argv);
@@ -347,6 +354,10 @@ Sets the name of the file to record the command to (default: C<benchart.xml>).
 
 Sets the name of the benchmark being recorded.
 If omitted, the name will be the Git commit id of the current directory, or the tag name if any.
+
+=head3 --reuse=name
+
+If specified, reuses the command that was used for obtaining the benchmark being named.
 
 =head2 pop
 
