@@ -270,7 +270,7 @@ sub load {
 
 sub save {
     my $doc = shift;
-    my $xml = XML::TreePP->new->write({ benchart => $doc });
+    my $xml = XML::TreePP->new(indent => 2)->write({ benchart => $doc });
 
     $xml =~ s{(<benchart>)}{$XSLT_PREPROC$1$XSLT}s;
 
