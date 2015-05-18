@@ -145,64 +145,12 @@ sub cmd_version {
     print "$VERSION\n";
 }
 
-sub cmd_try {
-    my $opt_force;
-    GetOptions(
-        force => \$opt_force,
-        @DEFAULT_OPTIONS,
-    ) or exit 1;
-
-    my $doc = load(1);
-    die "command for the benchmark is already registered; use `--force` to update it\n"
-        if ! $opt_force && $doc->{command};
-
-    my $scores = run_bench(@ARGV);
-    die "try failed; no benchmark data obtained\n"
-        unless @$scores;
-    $doc->{'try-command'} = {
-        arg => [@ARGV],
-    };
-
-    save($doc);
-
-    print "The command returned the following scores:\n\n";
-    for my $score (@$scores) {
-        print "    $score->[0]: $score->[1]\n";
-    }
-    print "\n";
-    print "If the results look ok, run `$0 try-ok` to commit the result and the benchmark command\n";
-
-}
-
-sub cmd_try_ok {
-    my $opt_force;
-    GetOptions(
-        force => \$opt_force,
-        @DEFAULT_OPTIONS,
-    ) or exit 1;
-
-    my $doc = load(0);
-    die "command not tested, run `$0 try [cmd...]` before running `try-ok`\n"
-        unless defined $doc->{'try-command'};
-    die "command for the benchmark is already registered; use `--force` to update it\n"
-        if ! $opt_force && $doc->{command};
-
-    $doc->{command} = $doc->{'try-command'};
-    delete $doc->{'try-command'};
-
-    save($doc);
-}
-
 sub cmd_record {
     my $name;
     GetOptions(
-        "name=s" => \$name,
+        'name=s' => \$name,
         @DEFAULT_OPTIONS,
     ) or exit 1;
-
-    my $doc = load(0);
-    die "command not registered; run `$0 try` and `$0 try-ok` befor running `$0 record`\n"
-        unless defined $doc->{command};
 
     if (! defined $name) {
         my $tags = `git describe --exact-match --tags 2> /dev/null`;
@@ -214,15 +162,25 @@ sub cmd_record {
         $name = (split "\n", $tags)[0];
     }
 
-    my $scores = run_bench(@{$doc->{command}->{arg}});
-    die "the command did not emit any benchmark data\n"
+    my $doc = load(1);
+
+    my @cmd_argv = @ARGV;
+    if (! @cmd_argv) {
+        die "no command\n"
+            unless @{$doc->{benchmark}};
+        @cmd_argv = @{$doc->{benchmark}->[@{$doc->{benchmark}} - 1]->{cmd}->{arg}};
+        print "re-running last benchmark command: " . (join " ",  @cmd_argv) . "\n";
+    }
+
+    my $scores = run_bench(@cmd_argv);
+    die "try failed; no benchmark data obtained\n"
         unless @$scores;
 
-    $doc->{benchmark} ||= [];
-    $doc->{benchmark} = [$doc->{benchmark}]
-        if ref $doc->{benchmark} eq 'HASH';
     push @{$doc->{benchmark}}, {
         name  => $name,
+        cmd   => {
+            arg => [@cmd_argv],
+        },
         score => [
             +(map {
                 +{
@@ -233,6 +191,19 @@ sub cmd_record {
         ],
     };
 
+    save($doc);
+
+    print "Following scores were recorded under name: $name.\n\n";
+    for my $score (@$scores) {
+        print "    $score->[0]: $score->[1]\n";
+    }
+    print "\n";
+    print "If the results look unapropriate, run `$0 pop` to pop the result\n";
+}
+
+sub cmd_pop {
+    my $doc = load(0);
+    pop @{$doc->{benchmark}};
     save($doc);
 }
 
@@ -264,7 +235,13 @@ sub load {
     my $doc = XML::TreePP->new->parse($src)
         or die "failed to parse file:$opt_file";
     $doc = $doc->{benchart};
+
+    # normalize
     delete $doc->{"xsl:stylesheet"};
+    $doc->{benchmark} ||= [];
+    $doc->{benchmark} = [$doc->{benchmark}]
+        if ref $doc->{benchmark} eq 'HASH';
+
     $doc;
 }
 
@@ -312,7 +289,7 @@ sub main {
         unless @ARGV;
     my $cmd = shift @ARGV;
 
-    $cmd =~ m{^(?:--)?(try|try-ok|record|show|help|version)$}s
+    $cmd =~ m{^(?:--)?(record|pop|show|help|version)$}s
         or die "unknown command: $cmd\n";
     $cmd = "cmd_$1";
     $cmd =~ tr/-/_/;
@@ -330,17 +307,17 @@ benchart - benchmark recorder and visualizer
 
 =head1 SYNOPSIS
 
-  # setup the benchmark command
-  $0 try -- benchmark-cmd args...
+  # record a benchmark by running cmd
+  $0 record -- cmd...
 
-  # register the benchmark command being tried
-  $0 try-ok
-
-  # record the benchmark (by running the registered command)
+  # re-record a benchmark using the last-used command
   $0 record
 
   # show the results
   $0 show
+
+  # pop the last benchmark
+  $0 pop
 
 =head1 DESCRIPTION
 
@@ -349,16 +326,16 @@ The command records the results of the conducted benchmarks in C<benchart.xml> w
 The benchmark script must emit a series of space-or-colon-separated lines that contains key-values pairs of the scores, and the scores look like numbers.
 E.g. in case of SunSpider benchmark, the result of the benchmark program should look like:
 
-3d/cube             14.1
-3d/morph            5.3
-3d/raytrace         13.0
-access/binary-trees 3.0
+  3d/cube             14.1
+  3d/morph            5.3
+  3d/raytrace         13.0
+  access/binary-trees 3.0
 
 =head1 SUB-COMMANDS
 
-=head2 try
+=head2 record
 
-Tests if given command can be used for recording the benchmarks.
+Records a benchmark using given command (or last command, if no command is given).
 
 The sub-command recognizes the following options.
 
@@ -366,36 +343,18 @@ The sub-command recognizes the following options.
 
 Sets the name of the file to record the command to (default: C<benchart.xml>).
 
-=head3 --force
-
-Runs the trial the test even if a command is already registered to the file.
-
-=head2 try-ok
-
-Registers the tried command to be used for the benchmarks.
-
-The sub-command recognizes the following options.
-
-=head3 --file=file
-
-=head3 --force
-
-See above.
-
-=head2 record
-
-The sub-command recognizes the following options.
-
-Records the benchmark by running the registered command.
-
-=head3 --file=file
-
-See above.
-
 =head3 --name=name
 
 Sets the name of the benchmark being recorded.
 If omitted, the name will be the Git commit id of the current directory, or the tag name if any.
+
+=head2 pop
+
+Removes the last benchmark from the benchmark records.
+
+=head3 --file=file
+
+See above.
 
 =head2 show
 
