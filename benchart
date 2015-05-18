@@ -208,6 +208,13 @@ sub cmd_record {
     print "If the results look unapropriate, run `$0 pop` to pop the result\n";
 }
 
+sub cmd_list_commands {
+    my $doc = load(0);
+    for my $bench (@{$doc->{benchmark}}) {
+        print "$bench->{name}: ", (join " ", @{$bench->{cmd}->{arg}}), "\n";
+    }
+}
+
 sub cmd_pop {
     my $doc = load(0);
     pop @{$doc->{benchmark}};
@@ -296,7 +303,7 @@ sub main {
         unless @ARGV;
     my $cmd = shift @ARGV;
 
-    $cmd =~ m{^(?:--)?(record|pop|show|help|version)$}s
+    $cmd =~ m{^(?:--)?(record|list-commands|pop|show|help|version)$}s
         or die "unknown command: $cmd\n";
     $cmd = "cmd_$1";
     $cmd =~ tr/-/_/;
@@ -358,6 +365,10 @@ If omitted, the name will be the Git commit id of the current directory, or the 
 =head3 --reuse=name
 
 If specified, reuses the command that was used for obtaining the benchmark being named.
+
+=head2 list-commands
+
+Lists the commands used to take the benchmarks.
 
 =head2 pop
 
