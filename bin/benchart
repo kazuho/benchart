@@ -333,10 +333,10 @@ benchart - benchmark recorder and visualizer
   # setup the benchmark command
   $0 try -- benchmark-cmd args...
 
-  # commit the benchmark command
+  # register the benchmark command being tried
   $0 try-ok
 
-  # record the benchmark
+  # record the benchmark (by running the registered command)
   $0 record
 
   # show the results
@@ -354,27 +354,60 @@ E.g. in case of SunSpider benchmark, the result of the benchmark program should 
 3d/raytrace         13.0
 access/binary-trees 3.0
 
-=head1 OPTIONS
+=head1 SUB-COMMANDS
 
-=head2 --file=file
+=head2 try
 
-Sets the name of the file to record the benchmarks (default: C<benchart.xml>).
+Tests if given command can be used for recording the benchmarks.
 
-=head2 --name=name
+The sub-command recognizes the following options.
 
-Sets the name of the benchmark being recorded by the benchmark-script.
+=head3 --file=file
+
+Sets the name of the file to record the command to (default: C<benchart.xml>).
+
+=head3 --force
+
+Runs the trial the test even if a command is already registered to the file.
+
+=head2 try-ok
+
+Registers the tried command to be used for the benchmarks.
+
+The sub-command recognizes the following options.
+
+=head3 --file=file
+
+=head3 --force
+
+See above.
+
+=head2 record
+
+The sub-command recognizes the following options.
+
+Records the benchmark by running the registered command.
+
+=head3 --file=file
+
+See above.
+
+=head3 --name=name
+
+Sets the name of the benchmark being recorded.
 If omitted, the name will be the Git commit id of the current directory, or the tag name if any.
 
-=head2 --show[=progname]
+=head2 show
 
-Opens the benchmark chart using the specified web browser (defaults to Safari).
-Note that Google Chrome cannot be used for viewing the charts unless you set the XSLT link to a local file.
+Opens the benchmark chart using a web browser.
 
-=head2 --xsl[=/path/to/xsl-file]
+=head3 --file=file
 
-Path of the XSLT file to be recorded in C<benchart.xml>.
-The default path is C<https://examp1e.net/benchart/benchart.xlst>.
-The path is reset to the default if an empty value is specified.
+See above.
+
+=head3 --browser[=name]
+
+Specifies the name of the web browser to be used (defaults to Safari).
 
 =head1 AUTHOR
 
